@@ -2,7 +2,7 @@
 from ..Log import Log
 from ..Client import Client
 
-class ExampleModule:
+class DataCollector:
 
     def __init__(self):
         self.log = Log()

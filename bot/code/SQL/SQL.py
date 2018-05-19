@@ -6,7 +6,6 @@ import pathlib
 from ..Singleton import Singleton
 from ..Log import Log
 from ..Client import Client
-from .table_setup import table_setup
 
 
 
@@ -98,13 +97,13 @@ class SQL(metaclass=Singleton):
     async def table_setup(self):
         """Setup any SQL tables needed for this class
         """
-        log = Log()
+        self.log = Log()
 
 
-        log.info("Check to see if users exists.")
-        if not await sql.table_exists("users"):
-            log.info("Create users table")
-            cur = sql.cur
+        self.log.info("Check to see if users exists.")
+        if not await self.table_exists("users"):
+            self.log.info("Create users table")
+            cur = self.cur
             cmd = """
                 CREATE TABLE IF NOT EXISTS users
                 (
@@ -120,13 +119,13 @@ class SQL(metaclass=Singleton):
                     created_at INTEGER
                 )"""
             cur.execute(cmd)
-            await sql.commit()
+            await self.commit()
 
 
-        log.info("Check to see if messages exists.")
-        if not await sql.table_exists("messages"):
-            log.info("Create messages table")
-            cur = sql.cur
+        self.log.info("Check to see if messages exists.")
+        if not await self.table_exists("messages"):
+            self.log.info("Create messages table")
+            cur = self.cur
             cmd = """
                 CREATE TABLE messages
                 (
@@ -138,13 +137,13 @@ class SQL(metaclass=Singleton):
                 )
             """
             cur.execute(cmd)
-            await sql.commit()
+            await self.commit()
 
 
-        log.info("Check to see if saved_messages exists.")
-        if not await sql.table_exists("saved_messages"):
-            log.info("Create saved_messages table")
-            cur = sql.cur
+        self.log.info("Check to see if saved_messages exists.")
+        if not await self.table_exists("saved_messages"):
+            self.log.info("Create saved_messages table")
+            cur = self.cur
             cmd = """
                 CREATE TABLE saved_messages
                 (
@@ -165,7 +164,7 @@ class SQL(metaclass=Singleton):
                 )
             """
             cur.execute(cmd)
-            await sql.commit()
+            await self.commit()
 
 
 

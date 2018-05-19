@@ -3,9 +3,10 @@
 import os
 import argparse
 
-from code.Client import Client
-from code.ExampleModule import ExampleModule
-from code.Log import Log
+from .code.Client import Client
+from .code.DataCollector import DataCollector
+from .code.Log import Log
+from .code.SQL import SQL
 
 parser = argparse.ArgumentParser(description='Basic Bot Demo')
 
@@ -15,6 +16,9 @@ parser.add_argument('--name',
 
 parser.add_argument('--token',
                     help='Token to use to login')
+
+parser.add_argument('--env',
+                    help='Current environment')
 
 parser.add_argument('--log-level',
                     choices = ['INFO','DEBUG'],
@@ -29,12 +33,14 @@ log.info(args)
 
 x = Client()
 
+x.register(SQL("logs.db"))
+
 
 #################################
 ### Register all modules here ###
 #################################
 
-x.register(ExampleModule())
+x.register(DataCollector())
 
 #################################
 ### Register all modules here ###
