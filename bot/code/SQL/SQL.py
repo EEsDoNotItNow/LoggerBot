@@ -54,8 +54,49 @@ class SQL(metaclass=Singleton):
         if message.server:
             self.log.debug(f"         On: {message.server} ({message.server.id})")
 
+        data = {}
+        data['name'] = message.author.name
+        data['display_name'] = message.author.display_name
+        data['user_id'] = message.author.id
+        data['discriminator'] = message.author.discriminator
+        data['avatar'] = message.author.avatar
+        data['bot'] = message.author.bot
+        data['avatar_url'] = message.author.avatar_url
+        data['default_avatar_url'] = message.author.default_avatar_url
+        data['mention'] = message.author.mention
+        data['created_at'] = message.author.created_at
 
-    async def commit(self, now=False):
+        cmd = """
+            INSERT OR REPLACE INTO users 
+            (
+                name,
+                display_name,
+                user_id,
+                discriminator,
+                avatar,
+                bot,
+                avatar_url,
+                default_avatar_url,
+                mention,
+                created_at
+            ) VALUES (
+                :name,
+                :display_name,
+                :user_id,
+                :discriminator,
+                :avatar,
+                :bot,
+                :avatar_url,
+                :default_avatar_url,
+                :mention,
+                :created_at
+            )
+            """
+        self.cur.execute(cmd, data)
+        await self.commit()
+
+
+    async def commit(self, now=True):
         # Schedule a commit in the future
         # Get loop from the client, schedule a call to _commit and return
         if now:
@@ -64,7 +105,7 @@ class SQL(metaclass=Singleton):
             asyncio.ensure_future(self._commit(now))
 
 
-    async def _commit(self, now=False):
+    async def _commit(self, now=True):
         self.log.debug("Start a _commit()")
         if self._commit_in_progress and not now:
             self.log.debug("Skipped a _commit()")
@@ -108,6 +149,7 @@ class SQL(metaclass=Singleton):
                 CREATE TABLE IF NOT EXISTS users
                 (
                     name TEXT NOT NULL,
+                    display_name TEXT,
                     user_id TEXT NOT NULL,
                     discriminator TEXT,
                     avatar TEXT,
@@ -129,43 +171,16 @@ class SQL(metaclass=Singleton):
             cmd = """
                 CREATE TABLE messages
                 (
-                    trainer_id TEXT NOT NULL UNIQUE,
-                    user_id TEXT NOT NULL,
-                    server_id TEXT NOT NULL,
-                    nickname TEXT,
-                    created_on TEXT
+                    message_id TEXT NOT NULL UNIQUE,
+                    channel_id TEXT,
+                    author_id TEXT NOT NULL,
+                    created_at INTEGER,
+                    content TEXT,
+                    clean_content TEXT
                 )
             """
             cur.execute(cmd)
             await self.commit()
-
-
-        self.log.info("Check to see if saved_messages exists.")
-        if not await self.table_exists("saved_messages"):
-            self.log.info("Create saved_messages table")
-            cur = self.cur
-            cmd = """
-                CREATE TABLE saved_messages
-                (
-                    trainer_id TEXT NOT NULL UNIQUE,
-
-                    state INTEGER DEFAULT 0,
-
-                    /* Track where we are.*/
-                    current_region_id TEXT,
-                    current_zone_id TEXT,
-                    current_building_id TEXT,
-
-                    /* Track where we want to be, if we are traveling */
-                    destination_region_id TEXT DEFAULT NULL,
-                    destination_zone_id TEXT DEFAULT NULL,
-                    destination_building_id TEXT DEFAULT NULL,
-                    destination_distance REAL DEFAULT NULL
-                )
-            """
-            cur.execute(cmd)
-            await self.commit()
-
 
 
 """

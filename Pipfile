@@ -8,6 +8,8 @@ name = "pypi"
 [packages]
 
 discord = "*"
+requests = "*"
+numpy = "*"
 
 
 [dev-packages]
