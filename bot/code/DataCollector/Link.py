@@ -70,6 +70,18 @@ class Link(DownloaderBase):
                     self.log.error(f"File Name: {self.file_name}")
                     self.log.exception("Didn't save file")
                 break
+
+            # All else fails, scrap that site!
+            try:
+                await self.ScrapeUrl()
+            except requests.exceptions.HTTPError as e:
+                self.log.warning(f"Got http_status error on scrape: {e}")
+                self.log.error(f"I coulnd't find a way to save this url: {self.url}")
+            except Exception:
+                self.log.error("Failed to save file")
+                self.log.error(f"URL: {self.url}")
+                self.log.error(f"File Name: {self.file_name}")
+                self.log.exception("Didn't save file")
             break
 
         await self.save()

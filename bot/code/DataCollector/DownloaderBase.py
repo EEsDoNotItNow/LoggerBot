@@ -2,6 +2,7 @@
 from pathlib import Path
 import requests
 import re
+import time
 
 from ..Log import Log
 from ..SQL import SQL
@@ -11,6 +12,7 @@ class DownloaderBase:
 
     base_dest = Path("~/Pictures/LoggerBot/").expanduser()
     url_file_regex = r"https?:\/\/.*\/(?P<fn>.*\.(?:.*))$"
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
     def __init__(self, *args, **kwargs):
         self.saved = False
@@ -37,7 +39,7 @@ class DownloaderBase:
         self.dest.mkdir(parents=True, exist_ok=True)
 
         try:
-            r = requests.get(self.url)
+            r = requests.get(self.url, headers=self.headers)
         except requests.exceptions.ConnectionError:
             self.http_status = 599
             raise
@@ -61,30 +63,23 @@ class DownloaderBase:
         self.saved = True
 
 
-    async def ScrapeUrl(url):
+    async def ScrapeUrl(self):
         self.log.info(f"Attempt to scrape url {self.url} to {self.dest}")
 
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-
-        response = requests.get(url, headers=headers)
+        response = requests.get(self.url, headers=self.headers)
 
         response.raise_for_status()
 
         # Handle e621.net links
-        match_obj = re.search(r"<a href=\"(?P<url>[0-9a-zA-Z_$\-\.\+\!\*\'\(\)\,]*)\">Download</a>", response.text)
-        if match_obj:
-            self.url = match_obj.group('url')
+        match_e621 = re.search(r'<a href="(?P<url>.*)">Download<\/a>', response.text)
+        if match_e621 and False:
+            self.url = match_e621.group('url')
             match_obj = re.search(self.url_file_regex, self.url, re.IGNORECASE)
             if match_obj:
                 self.log.info("Found a valid match for e621 links, save it!")
                 self.file_name = match_obj.group("fn")
-                self.file_name = Path(f"{self.message.id}_{self.file_name}")
-                await DownloadFile()
+                self.file_name = f"{self.message.id}_{self.file_name}"
+                await self.DownloadFile()
                 return
-
-        self.log.error(f"No match found for {url}")
-        dest.mkdir(parents=True, exist_ok=True)
-        _file = Path(dest, f"{url.replace('/','')}.html")
-        self.log.info(f"Write to file {_file}")
-        with open(_file, 'w') as f:
-            f.write(f'<meta http-equiv="refresh" content="0; URL=\'{url}\'" />')
+        else:
+            self.log.warning(f"Unable to scrape URL: {self.url}")

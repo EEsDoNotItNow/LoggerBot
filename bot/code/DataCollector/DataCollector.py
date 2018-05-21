@@ -12,6 +12,7 @@ from ..Log import Log
 from ..SQL import SQL
 
 from .Attachment import Attachment
+from .e621 import e621
 from .Embed import Embed
 from .Link import Link
 
@@ -39,10 +40,8 @@ class DataCollector:
         self.log.info("Catchup to missing messages!")
         for server in self.client.servers:
             self.log.info(f"Catchup on {server}")
-            for channel in server.channels:
-                if channel.name != "nsfw-pics":
-                    self.log.warning(f"Skipping {channel}")
-                    continue
+            channels = sorted(server.channels, key=lambda x: x.position)
+            for channel in channels:
                 self.log.info(f"Catchup on {channel}")
                 messages = self.client.logs_from(channel, limit=10000000)
                 count = 0
@@ -80,10 +79,28 @@ class DataCollector:
         urls = re.findall('(https?://[^ ><\n]+)', message.content)
         for url in urls:
             await asyncio.sleep(np.random.rand()*found_files)
+
+            # Check to see if we have an e621
+            is_e621 = re.match(r"https?://e621.net", url)
+            if is_e621:
+                self.log.info("Found a valid e621 link!")
+                url_getter = e621(url)
+                await url_getter.process()
+                for url in url_getter.urls:
+                    await asyncio.sleep(np.random.rand()*found_files)
+                    self.log.info(f"Found URL: {url}")
+                    link = Link(url, message)
+                    await link.process()
+                    found_files += 1 if link.saved else 0
+                continue
+
+            # Link wasn't a special case, just run it
             self.log.info(f"Found URL: {url}")
             link = Link(url, message)
             await link.process()
             found_files += 1 if link.saved else 0
+            if not link.saved:
+                self.log.info(f"Failed to use Link on {url}")
 
         if found_files:
             return found_files
