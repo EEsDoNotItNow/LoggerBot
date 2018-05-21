@@ -150,7 +150,7 @@ class SQL(metaclass=Singleton):
                 (
                     name TEXT NOT NULL,
                     display_name TEXT,
-                    user_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL UNIQUE,
                     discriminator TEXT,
                     avatar TEXT,
                     bot BOOLEAN,
@@ -173,10 +173,86 @@ class SQL(metaclass=Singleton):
                 (
                     message_id TEXT NOT NULL UNIQUE,
                     channel_id TEXT,
+                    server_id TEXT,
                     author_id TEXT NOT NULL,
                     created_at INTEGER,
                     content TEXT,
-                    clean_content TEXT
+                    clean_content TEXT,
+                    embed_count INTEGER,
+                    user_mention_count INTEGER,
+                    channel_mention_count INTEGER,
+                    attachment_count INTEGER,
+                    reaction_count INTEGER
+                )
+            """
+            cur.execute(cmd)
+            await self.commit()
+
+
+        self.log.info("Check to see if links exists.")
+        if not await self.table_exists("links"):
+            self.log.info("Create links table")
+            cur = self.cur
+            cmd = """
+                CREATE TABLE links
+                (
+                    message_id TEXT NOT NULL,
+                    url TEXT,
+                    file_name TEXT,
+                    saved BOOLEAN,
+                    alt_saved BOOLEAN DEFAULT 0,
+                    http_status INTEGER,
+                    dest TEXT
+                )
+            """
+            cur.execute(cmd)
+            await self.commit()
+
+
+        self.log.info("Check to see if embeds exists.")
+        if not await self.table_exists("embeds"):
+            self.log.info("Create embeds table")
+            cur = self.cur
+            cmd = """
+                CREATE TABLE embeds
+                (
+                    message_id TEXT NOT NULL,
+                    url TEXT,
+                    proxy_url TEXT,
+                    provider_url TEXT,
+                    provider_name TEXT,
+                    type TEXT,
+                    description TEXT,
+                    title TEXT,
+                    file_name TEXT,
+                    saved BOOLEAN,
+                    http_status INTEGER,
+                    dest TEXT,
+                    author_url TEXT,
+                    author_name TEXT,
+                    video TEXT
+                )
+            """
+            cur.execute(cmd)
+            await self.commit()
+
+
+        self.log.info("Check to see if attachments exists.")
+        if not await self.table_exists("attachments"):
+            self.log.info("Create attachments table")
+            cur = self.cur
+            cmd = """
+                CREATE TABLE attachments
+                (
+                    message_id TEXT NOT NULL,
+                    attachment_id TEXT, --Unique?
+                    file_name TEXT, 
+                    height INTEGER,
+                    proxy_url TEXT,
+                    saved BOOLEAN,
+                    size INTEGER,
+                    url TEXT,
+                    width INTEGER
                 )
             """
             cur.execute(cmd)

@@ -1,15 +1,19 @@
 
-import discord
-import asyncio
-from pathlib import Path
-import requests
-import re
 from html.parser import HTMLParser
+from pathlib import Path
+import asyncio
+import discord
 import numpy as np
+import re
+import requests
 
-from ..Log import Log
 from ..Client import Client
+from ..Log import Log
 from ..SQL import SQL
+
+from .Attachment import Attachment
+from .Embed import Embed
+from .Link import Link
 
 class DataCollector:
 
@@ -36,89 +40,124 @@ class DataCollector:
         for server in self.client.servers:
             self.log.info(f"Catchup on {server}")
             for channel in server.channels:
+                if channel.name != "nsfw-pics":
+                    self.log.warning(f"Skipping {channel}")
+                    continue
                 self.log.info(f"Catchup on {channel}")
-                messages = self.client.logs_from(channel, limit=1000)
+                messages = self.client.logs_from(channel, limit=10000000)
+                count = 0
                 try:
                     async for message in messages:
-                        parsed = await self.process_message(message)
+                        count += 1
+                        try:
+                            parsed = await self.process_message(message)
+                        except Exception:
+                            self.log.exception("Failed to parse a message")
+                            continue
                         if parsed:
-                            await asyncio.sleep(np.random.rand()*60)
+                            await asyncio.sleep(np.random.rand()*5)
                             self.log.info("Wake up and scan")
                 except discord.errors.Forbidden:
                     continue
+                self.log.info(f"Channel {channel} had {count:,.0f} messages")
         self.log.info("Catchup completed")
         pass
 
     async def process_message(self, message):
+        """New way to handle a message
+        """
+        found_files = 0
 
-        found_files = False
+        # Don't reprocess messages, ever!
+        message_id = message.id
+        values = self.sql.cur.execute("SELECT * FROM messages WHERE message_id=:message_id",locals()).fetchone()
+        if values:
+            return 0
+
+        await self.log_message(message)
+
+        # Check for links, download each of them
+        urls = re.findall('(https?://[^ ><\n]+)', message.content)
+        for url in urls:
+            await asyncio.sleep(np.random.rand()*found_files)
+            self.log.info(f"Found URL: {url}")
+            link = Link(url, message)
+            await link.process()
+            found_files += 1 if link.saved else 0
+
+        if found_files:
+            return found_files
+
+        # If no links, check for embeds, download each of them
+        for embed in message.embeds:
+            await asyncio.sleep(np.random.rand()*found_files)
+            self.log.info(f"Found Embed")
+            embed = Embed(embed, message)
+            await embed.process()
+            found_files += 1
+
+        if found_files:
+            return found_files
+
+        # If no embeds, check for attachments, download each of them
+        for attachment in message.attachments:
+            await asyncio.sleep(np.random.rand()*found_files)
+            self.log.info(f"Found Attachment")
+            attachment = Attachment(attachment, message)
+            await attachment.process()
+            found_files += 1
+            
+        return found_files
+
+
+    async def log_message(self, message):
 
         message_id = message.id
         channel_id = message.channel.id if message.channel else None
+        server_id = message.server.id if message.channel else None
         author_id = message.author.id
         created_at = message.timestamp.timestamp()
         content = message.content
         clean_content = message.clean_content
+        embed_count = len(message.embeds)
+        user_mention_count = len(message.mentions)
+        channel_mention_count = len(message.channel_mentions)
+        attachment_count = len(message.attachments)
+        reaction_count = len(message.reactions)
 
-        # Make sure we havn't already processed this one
-        values = self.sql.cur.execute("SELECT * FROM messages WHERE message_id=:message_id",locals()).fetchone()
-        if values:
-            return False
-
-        save_location = Path(self.inbox_dir, message.channel.name)
-
-        if message.attachments:
-            for attachment in message.attachments:
-                self.log.info("Found an attachment, attempt to download")
-                asyncio.ensure_future(DownloadFile(attachment['url'], save_location, message))
-                found_files = True
-
-
-        if message.embeds:
-            for embed in message.embeds:
-                if embed['type'] == 'image':
-                    self.log.info("Found an embed, attempt to download")
-                    asyncio.ensure_future(DownloadFile(embed['url'], save_location, message))
-                    found_files = True
-                elif embed['type'] == 'link':
-                    asyncio.ensure_future(ScrapeUrl(embed['url'], save_location, message))
-                    found_files = True
-                else:
-                    self.log.warning("Unsure what to do with embed:")
-                    self.log.warning(embed)
-
-        if not message.embeds or message.attachments:
-            urls = re.findall('(https?://[^ ><]+)', message.content)
-            for url in urls:
-                self.log.info(f"Found URL: {url}")
-                asyncio.ensure_future(ScrapeUrl(url, save_location, message))
-                found_files = True
-
-
+        # Log message
         cmd = """
             INSERT INTO messages 
             (
                 message_id,
                 channel_id,
+                server_id,
                 author_id,
                 created_at,
                 content,
-                clean_content
+                clean_content,
+                embed_count,
+                user_mention_count,
+                channel_mention_count,
+                attachment_count,
+                reaction_count
             ) VALUES (
                 :message_id,
                 :channel_id,
+                :server_id,
                 :author_id,
                 :created_at,
                 :content,
-                :clean_content
+                :clean_content,
+                :embed_count,
+                :user_mention_count,
+                :channel_mention_count,
+                :attachment_count,
+                :reaction_count
             )
             """
         self.sql.cur.execute(cmd, locals())
         await self.sql.commit()
-        return found_files
-
-    async def save_images(self, message):
-        pass
 
 
     async def on_channel_create(self, channel):
@@ -240,52 +279,3 @@ class DataCollector:
     async def on_voice_state_update(self, before, after):
         pass
 
-async def DownloadFile(url, dest, message):
-    log = Log()
-    log.info(f"Attempt to download {url} to {dest}")
-
-    dest.mkdir(parents=True, exist_ok=True)
-
-    local_filename = url.split('/')[-1]
-
-    r = requests.get(url)
-
-    r.raise_for_status()
-
-    _file = Path(dest,local_filename)
-    if _file.is_file():
-        _file = Path(f"{_file}_{message.id}")
-
-    with open(_file, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024): 
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
-
-async def ScrapeUrl(url, dest, message):
-    log = Log()
-    log.info(f"Attempt to scrape url {url} to {dest}")
-
-    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-
-    match_obj = re.search(".*\.(jpg|jpeg|png)$", url)
-    if match_obj:
-        await DownloadFile(url, dest, message)
-        return
-
-    response = requests.get(url, headers=headers)
-
-    log.info(response)
-    log.info(response.encoding)
-    # log.info(response.text)
-    match_obj = re.search("<a href=\"(?P<file>.*)\">Download</a>", response.text)
-    if match_obj:
-        log.info("Attempt to download the image!")
-        await DownloadFile(match_obj.group("file"), dest, message)
-        return
-
-    log.error(f"No match found for {url}")
-    dest.mkdir(parents=True, exist_ok=True)
-    _file = Path(dest, f"{url.replace('/','')}.html")
-    log.info(f"Write to file {_file}")
-    with open(_file, 'w') as f:
-        f.write(f'<meta http-equiv="refresh" content="0; URL=\'{url}\'" />')
