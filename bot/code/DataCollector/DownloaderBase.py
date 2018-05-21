@@ -11,7 +11,7 @@ from ..SQL import SQL
 class DownloaderBase:
 
     base_dest = Path("~/Pictures/LoggerBot/").expanduser()
-    url_file_regex = r"https?:\/\/.*\/(?P<fn>.*\.(?:.*))$"
+    url_file_regex = r"https?:\/\/.*\/(?P<fn>.*\.[^\/\n]*)$"
     headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
     def __init__(self, *args, **kwargs):
@@ -64,6 +64,9 @@ class DownloaderBase:
 
 
     async def ScrapeUrl(self):
+        self.log.info("Currently not attempting to scape URLS, just return")
+        return
+
         self.log.info(f"Attempt to scrape url {self.url} to {self.dest}")
 
         response = requests.get(self.url, headers=self.headers)

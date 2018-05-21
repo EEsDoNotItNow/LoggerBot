@@ -81,7 +81,7 @@ class DataCollector:
             await asyncio.sleep(np.random.rand()*found_files)
 
             # Check to see if we have an e621
-            is_e621 = re.match(r"https?://e621.net", url)
+            is_e621 = re.match(r"https?://e621.net/(post|pool)", url)
             if is_e621:
                 self.log.info("Found a valid e621 link!")
                 url_getter = e621(url)

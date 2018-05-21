@@ -22,7 +22,7 @@ class e621:
             self.url = match_pool.group(0)+ ".json" if not url.endswith(".json") else ""
             self.type = "pool"
         else:
-            raise ValueError
+            raise ValueError(f"Invalid url: {url}")
         self.urls = []
 
 

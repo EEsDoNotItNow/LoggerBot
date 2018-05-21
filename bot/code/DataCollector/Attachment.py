@@ -30,7 +30,7 @@ class Attachment(DownloaderBase):
         file_name = self.attachment['filename']
         height = self.attachment['height']
         proxy_url = self.attachment['proxy_url']
-        saved = self.attachment['saved']
+        saved = self.saved
         size = self.attachment['size']
         url = self.attachment['url']
         width = self.attachment['width']

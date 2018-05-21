@@ -95,13 +95,12 @@ class Embed(DownloaderBase):
         elif self.embed['type'] == 'image':
             self.url = self.embed['url']
             match_obj = re.search(self.url_file_regex, self.url, re.IGNORECASE)
-            self.file_name = match_obj.group("fn")
 
-            if self.file_name is not None:
-                self.file_name = f"{self.message.id}_{self.file_name}"
+            if match_obj is not None:
+                self.file_name = match_obj.group("fn")
 
             try:
-                if self.file_name is not None:
+                if match_obj is not None:
                     await self.DownloadFile()
                 else:
                     await self.ScrapeUrl()
