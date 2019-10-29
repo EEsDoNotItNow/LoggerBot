@@ -3,6 +3,7 @@ from pathlib import Path
 import requests
 import re
 import time
+import asyncio
 
 from ..Log import Log
 from ..SQL import SQL
@@ -52,15 +53,24 @@ class DownloaderBase:
             self.log.error("Bad status on file, we are done here!")
             raise
         
+        if len(Path(self.file_name).suffix.split('?')) > 1:
+            fn = Path(self.file_name)
+            log.warning("Detected malformed filename, correcting")
+            f = list(filter(None, re.split("[?&]+", fn.suffix)))
+            self.file_name = str(Path(fn.stem + f[0]))
+            log.warning(f"New filename is {self.file_name}")
+
         # Check to see if we need to modify our file_name
         while Path(self.dest,self.file_name).is_file():
             self.file_name = self.file_name.stem + "_copy" + self.file_name.suffix
         _file = Path(self.dest,self.file_name)
         with open(_file, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024): 
+            for chunk in r.iter_content(chunk_size=1024):
+                await asyncio.sleep(0)
                 if chunk: # filter out keep-alive new chunks
                     f.write(chunk)
 
+        log.info(f"File save completed on {self.file_name}")
         # TODO: Attempt to hash file
         # TODO: If hash already exists, move file to a duplication folder for later pruning
         self.saved = True

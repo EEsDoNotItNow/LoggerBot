@@ -46,7 +46,7 @@ class DataCollector:
                     continue
                 self.log.info(f"Catchup on {channel}")
                 messages = []
-                async for message in channel.history(limit=500):
+                async for message in channel.history(limit=1000):
                     messages.append(message)
                 count = 0
                 try:
