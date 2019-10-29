@@ -61,6 +61,8 @@ def mark_removed(file_name):
 def insert_skip(file_name1, file_name2):
     cur.execute("INSERT OR IGNORE INTO skips (file_name1, file_name2) VALUES (?,?)", 
         (str(file_name1), str(file_name2)))
+    cur.execute("INSERT OR IGNORE INTO skips (file_name1, file_name2) VALUES (?,?)", 
+        (str(file_name2), str(file_name1)))
     conn.commit()
 
 def insert_md5(file_name, md5):
@@ -182,6 +184,10 @@ for p in pathlib.Path('/home/pheonix/Pictures').glob("**/*"):
     conn.commit()
     logger.info(f"Saved {p}")
 
+logger.info("Load extention")
+conn.enable_load_extension(True)
+cur.execute("SELECT load_extension('/home/pheonix/Git/sqlite-hexhammdist/sqlite-hexhammdist.so','hexhammdist_init')")
+
 # Process images to check for duplicates
 logger.info("Import completed, now checking for duplicates")
 t_last = time.time()
@@ -190,125 +196,102 @@ if args.rowid is None:
     args.rowid = cur.execute('SELECT max(rowid) as rowid FROM images').fetchone()['rowid']
 
 logger.info(args.rowid)
-
-for idx, current_image in enumerate(cur.execute("SELECT *,rowid FROM images WHERE removed=0 AND rowid<=? ORDER BY rowid DESC",(args.rowid,) ).fetchall()):
-    logger.info(f"Last loop took {time.time() - t_last:.3f}s")
-    logger.info(current_image['rowid'])
-    t_last = time.time()
+t1 = time.time()
+for idx, current_image in enumerate(cur.execute("SELECT *,rowid FROM images WHERE removed = 0 AND rowid<=? ORDER BY rowid DESC",(args.rowid,) ).fetchall()):
+    
     p_current = pathlib.Path(current_image['file_name'])
     if not p_current.exists():
         mark_removed(p_current)
         logger.warning(f"Removed a non-existent file: {p_current}")
         continue
-    ahash = imagehash.hex_to_hash(current_image['ahash'])
-    phash = imagehash.hex_to_hash(current_image['phash'])
-    dhash = imagehash.hex_to_hash(current_image['dhash'])
-    whash = imagehash.hex_to_hash(current_image['whash'])
-    md5_current = hashlib.md5(Image.open(p_current).tobytes()).hexdigest()
-    if current_image['md5'] == None:
-        logger.info(f"Update MD5 for {current_image['file_name']}")
-        insert_md5(current_image['file_name'], md5_current)
-    db_changed = False
-    while 1:
-        if not p_current.is_file():
-            logger.info("Looks like our file is gone, break")
+
+
+    cmd = f"""
+    SELECT 
+    *, 
+    hexhammdist(ahash,'{current_image['ahash']}') as d_ahash,
+    hexhammdist(phash,'{current_image['phash']}') as d_phash,
+    hexhammdist(dhash,'{current_image['dhash']}') as d_dhash,
+    hexhammdist(whash,'{current_image['whash']}') as d_whash
+    FROM images
+    WHERE rowid < {current_image['rowid']}
+    AND removed = 0
+    AND d_ahash < {args.threshold}
+    AND d_phash < {args.threshold}
+    AND d_dhash < {args.threshold}
+    AND d_whash < {args.threshold}
+    """
+    logger.info(current_image['rowid'])
+    # Check if current_image even exists, continue if not
+    for db_image in cur.execute(cmd).fetchall():
+        # Check if this image combo has been seen before, skip if so
+        if cur.execute("SELECT * FROM skips WHERE file_name1=? AND file_name2=?", (str(p_current),str(db_image['file_name'])) ).fetchone() is not None:
+            logger.info(f"Skipping per DB, file was {db_image['file_name']}")
+            continue
+        if cur.execute("SELECT * FROM skips WHERE file_name2=? AND file_name1=?", (str(p_current),str(db_image['file_name'])) ).fetchone() is not None:
+            logger.info(f"Skipping per DB, file was {db_image['file_name']}")
+            continue
+        # Ask user WTF to do (or run MD5 if needed)
+        p_db = pathlib.Path(db_image['file_name'])
+
+        logger.warning("Hashes match, show the images and quit!")
+        logger.info("A:")
+        logger.info(f"  File Name: {p_current} ")
+        logger.info(f"       Size: {p_current.stat().st_size} ")
+        logger.info(f"       MD5: {current_image['md5']} ")
+        logger.info("B:")
+        logger.info(f"  File Name: {p_db} ")
+        logger.info(f"       Size: {p_db.stat().st_size} ")
+        logger.info(f"       MD5: {db_image['md5']} ")
+        logger.info(f"ahash: {db_image['d_ahash']}")
+        logger.info(f"phash: {db_image['d_phash']}")
+        logger.info(f"dhash: {db_image['d_dhash']}")
+        logger.info(f"whash: {db_image['d_whash']}")
+        logger.info(f"A to keep {p_current}")
+        logger.info(f"B to keep {db_image['file_name']}")
+        logger.info("D to display")
+        logger.info(f"S to skip")
+        logger.info("N/C do do nothing/continue")
+        if p_current.stat().st_size < db_image['size']:
+            logger.info(f"Suggesting B, as it is larger ({db_image['size']} > {p_current.stat().st_size})")
+        elif p_current.stat().st_size > db_image['size']:
+            logger.info(f"Suggesting A, as it is larger ({db_image['size']} < {p_current.stat().st_size})")
+        while 1:
+            if current_image['md5'] == db_image['md5']:
+                logger.info("md5 is identical! Keeping A, moving B")
+                choice = 'a'
+            else:
+                choice = input("> ").lower()
+
+            if choice == 'n' or choice =='c':
+                logger.info("Do nothing and move on.")
+                break
+
+            if choice == "s":
+                insert_skip(p_current, p_db)
+                break
+
+            if choice == "d":
+                I1 = Image.open(p_current)
+                I2 = Image.open(db_image['file_name'])
+                I1.show()
+                I2.show()
+                continue
+
+            elif choice == "a":
+                file_to_move = pathlib.Path(db_image['file_name'])
+
+            elif choice == "b":
+                file_to_move = p_current
+
+            # TODO: This really should be a config value in the script
+            file_dest = pathlib.Path("/home/pheonix/Duplicates/",file_to_move.name)
+            while pathlib.Path(file_dest).is_file():
+                file_dest = pathlib.Path(file_dest.parent, file_dest.stem + "_copy" + file_dest.suffix)
+                logger.info(f"Had to rename file to {file_dest}")
+            shutil.move(str(file_to_move), str(file_dest))
+            mark_removed(file_to_move)
+            db_changed = True
             break
-        total_images = cur.execute("SELECT count(*) FROM images WHERE removed=0").fetchone()
-        logger.info(f"Currently on rowid {current_image['rowid']}/{total_images['count(*)']} ({idx/total_images['count(*)']:.3%}) with file name {p_current}")
-        db_changed = False
-
-        # Load Skips
-        skips = cur.execute("SELECT * FROM skips WHERE file_name1=?", (str(p_current),) ).fetchall()
-
-        for db_image in cur.execute("SELECT * FROM images WHERE removed=0 AND file_name != ? AND rowid<?", 
-                (
-                    str(p_current),
-                    current_image['rowid']
-                )
-            ).fetchall():
-
-            p_db = pathlib.Path(db_image['file_name'])
-
-            found_skip = False
-            for skip in skips:
-                if str(p_db) == skip['file_name2']:
-                    found_skip = True
-                    logger.info(f"Skipping per DB, file {skip['file_name2']}")
-            if found_skip:
-                break
-
-            if not p_db.exists():
-                mark_removed(p_db)
-                logger.warning(f"Removed a non-existent file: {p_db}")
-                db_changed = True
-                break
-            db_ahash = imagehash.hex_to_hash(db_image['ahash'])
-            db_phash = imagehash.hex_to_hash(db_image['phash'])
-            db_dhash = imagehash.hex_to_hash(db_image['dhash'])
-            db_whash = imagehash.hex_to_hash(db_image['whash'])
-
-            if db_phash - phash <= args.threshold and \
-               db_ahash - ahash <= args.threshold and \
-               db_dhash - dhash <= args.threshold and \
-               db_whash - whash <= args.threshold:
-                md5_db = hashlib.md5(Image.open(db_image['file_name']).tobytes()).hexdigest()
-                logger.warning("Hashes match, show the images and quit!")
-                logger.info("A:")
-                logger.info(f"  File Name: {p_current} ")
-                logger.info(f"       Size: {p_current.stat().st_size} ")
-                logger.info(f"       MD5: {md5_current} ")
-                logger.info("B:")
-                logger.info(f"  File Name: {p_db} ")
-                logger.info(f"       Size: {p_db.stat().st_size} ")
-                logger.info(f"       MD5: {md5_db} ")
-                logger.info(f"ahash: {db_ahash - ahash}")
-                logger.info(f"phash: {db_phash - phash}")
-                logger.info(f"dhash: {db_dhash - dhash}")
-                logger.info(f"whash: {db_whash - whash}")
-                logger.info(f"A to keep {p_current}")
-                logger.info(f"B to keep {db_image['file_name']}")
-                logger.info("D to display")
-                logger.info(f"S to skip")
-                if p_current.stat().st_size < db_image['size']:
-                    logger.info(f"Suggesting B, as it is larger ({db_image['size']} > {p_current.stat().st_size})")
-                elif p_current.stat().st_size > db_image['size']:
-                    logger.info(f"Suggesting A, as it is larger ({db_image['size']} < {p_current.stat().st_size})")
-                while 1:
-                    if md5_current == md5_db:
-                        logger.info("md5 is identical! Keeping A, moving B")
-                        choice = 'a'
-                    else:
-                        choice = input("> ").lower()
-
-                    if choice == "s":
-                        insert_skip(p_current, p_db)
-                        break
-
-                    if choice == "d":
-                        I1 = Image.open(p_current)
-                        I2 = Image.open(db_image['file_name'])
-                        I1.show()
-                        I2.show()
-                        continue
-
-                    elif choice == "a":
-                        file_to_move = pathlib.Path(db_image['file_name'])
-
-                    elif choice == "b":
-                        file_to_move = p_current
-
-                    # TODO: This really should be a config value in the script
-                    file_dest = pathlib.Path("/home/pheonix/Duplicates/",file_to_move.name)
-                    while pathlib.Path(file_dest).is_file():
-                        file_dest = pathlib.Path(file_dest.parent, file_dest.stem + "_copy" + file_dest.suffix)
-                        logger.info(f"Had to rename file to {file_dest}")
-                    shutil.move(str(file_to_move), str(file_dest))
-                    mark_removed(file_to_move)
-                    db_changed = True
-                    break
-            # Brself.time_stampeak to reset the for loop if we updated the db
-            if db_changed == True:
-                break
-        # if we escaped the for loop WITHOUT a change, break from the while loop
-        if db_changed == False:
-            break
+t2 = time.time()
+logger.info(f"Ran in {t2-t1:.3f} seconds")
