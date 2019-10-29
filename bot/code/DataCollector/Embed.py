@@ -18,8 +18,8 @@ class Embed(DownloaderBase):
         self.embed.update(embed)
         self.message = message
         self.channel_name = message.channel.name if message.channel else message.author.name
-        self.server_name = message.server.name if message.server else "PrivateMessages"
-        self.dest = Path(self.base_dest, self.server_name, self.channel_name)
+        self.guild_name = message.guild.name if message.guild else "PrivateMessages"
+        self.dest = Path(self.base_dest, self.guild_name, self.channel_name)
         self.file_name = None
         self.proxy_url = None
         self.provider_url = None

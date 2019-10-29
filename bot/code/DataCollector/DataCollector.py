@@ -38,14 +38,15 @@ class DataCollector:
 
     async def catchup_old_logs(self):
         self.log.info("Catchup to missing messages!")
-        for server in self.client.servers:
-            self.log.info(f"Catchup on {server}")
-            channels = sorted(server.channels, key=lambda x: x.position)
+        for guild in self.client.guilds:
+            self.log.info(f"Catchup on {guild}")
+            channels = sorted(guild.channels, key=lambda x: x.position)
             for channel in channels:
+                if type(channel) != discord.TextChannel:
+                    continue
                 self.log.info(f"Catchup on {channel}")
                 messages = []
-                message_gen = self.client.logs_from(channel, limit=500)
-                async for message in message_gen:
+                async for message in channel.history(limit=500):
                     messages.append(message)
                 count = 0
                 try:
@@ -140,9 +141,9 @@ class DataCollector:
 
         message_id = message.id
         channel_id = message.channel.id if message.channel else None
-        server_id = message.server.id if message.channel else None
+        server_id = message.guild.id if message.channel else None
         author_id = message.author.id
-        created_at = message.timestamp.timestamp()
+        created_at = message.created_at.timestamp()
         content = message.content
         clean_content = message.clean_content
         embed_count = len(message.embeds)
@@ -187,7 +188,7 @@ class DataCollector:
         if message.channel:
             name = message.channel.name
             channel_id = message.channel.id
-            server_id = message.server.id if message.server else None
+            server_id = message.guild.id if message.guild else None
             topic = message.channel.topic
             position = message.channel.position
             _type = str(message.channel.type)

@@ -54,8 +54,8 @@ class SQL(metaclass=Singleton):
     async def on_message(self, message):
         self.log.debug(f"Got message: {message.content}")
         self.log.debug(f"       From: {message.author.name} ({message.author.id})")
-        if message.server:
-            self.log.debug(f"         On: {message.server} ({message.server.id})")
+        if message.guild:
+            self.log.debug(f"         On: {message.guild} ({message.guild.id})")
 
         data = {}
         data['name'] = message.author.name
@@ -64,8 +64,8 @@ class SQL(metaclass=Singleton):
         data['discriminator'] = message.author.discriminator
         data['avatar'] = message.author.avatar
         data['bot'] = message.author.bot
-        data['avatar_url'] = message.author.avatar_url
-        data['default_avatar_url'] = message.author.default_avatar_url
+        data['avatar_url'] = str(message.author.avatar_url)
+        data['default_avatar_url'] = str(message.author.default_avatar_url)
         data['mention'] = message.author.mention
         data['created_at'] = message.author.created_at
 
