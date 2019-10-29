@@ -7,9 +7,13 @@ name = "pypi"
 
 [packages]
 
-discord = "*"
 requests = "*"
 numpy = "*"
+wordcloud = "*"
+matplotlib = "*"
+pillow = "*"
+imagehash = "*"
+"discord.py" = "*"
 
 
 [dev-packages]
@@ -18,4 +22,4 @@ numpy = "*"
 
 [requires]
 
-python_version = "3.6"
+python_version = "3.7"

@@ -2,6 +2,7 @@
 import asyncio
 import sqlite3
 import pathlib
+import time
 
 from ..Singleton import Singleton
 from ..Log import Log
@@ -16,18 +17,19 @@ class SQL(metaclass=Singleton):
     def __init__(self, db_name):
 
         db_path = pathlib.Path(db_name)
+        self.log = Log()
         if not db_path.is_file():
             self.create_db(db_name)
 
         self.conn = sqlite3.connect(db_name)
         self.conn.row_factory = self.dict_factory
-        self.log = Log()
         self.client = Client()
         self._commit_in_progress = False
         self.log.info("SQL init completed")
 
 
     def create_db(self, db_name):
+        self.log.warning("New DB file")
         conn = sqlite3.connect(db_name)
         cur = conn.cursor()
         cur.execute("PRAGMA journal_mode=WAL")
@@ -35,6 +37,7 @@ class SQL(metaclass=Singleton):
         cur.execute("PRAGMA synchronous=1")
         conn.commit()
         conn.close()
+        self.log.warning("Finished new DB file creation")
 
 
     @property
@@ -164,6 +167,25 @@ class SQL(metaclass=Singleton):
             await self.commit()
 
 
+        self.log.info("Check to see if channels exists.")
+        if not await self.table_exists("channels"):
+            self.log.info("Create channels table")
+            cur = self.cur
+            cmd = """
+                CREATE TABLE IF NOT EXISTS channels
+                (
+                    name TEXT NOT NULL,
+                    channel_id TEXT NOT NULL UNIQUE,
+                    server_id TEXT,
+                    topic TEXT,
+                    position INTEGER,
+                    type TEXT,
+                    mention TEXT
+                )"""
+            cur.execute(cmd)
+            await self.commit()
+
+
         self.log.info("Check to see if messages exists.")
         if not await self.table_exists("messages"):
             self.log.info("Create messages table")
@@ -257,6 +279,25 @@ class SQL(metaclass=Singleton):
             """
             cur.execute(cmd)
             await self.commit()
+
+
+        # self.log.info("Check to see if images exists.")
+        # if not await self.table_exists("images"):
+        #     self.log.info("Create images table")
+        #     cur = self.cur
+        #     cmd = """
+        #         CREATE TABLE images
+        #         (
+        #             file_name TEXT,
+        #             dest TEXT,
+        #             ahash TEXT,
+        #             phash TEXT,
+        #             dhash TEXT,
+        #             whash TEXT
+        #         )
+        #     """
+        #     cur.execute(cmd)
+        #     await self.commit()
 
 
 """

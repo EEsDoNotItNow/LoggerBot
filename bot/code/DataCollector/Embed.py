@@ -92,8 +92,29 @@ class Embed(DownloaderBase):
             self.title = self.embed['title']
             await self.save()
             return
-        elif self.embed['type'] == 'image':
+        elif self.embed['type'] in ['image']:
             self.url = self.embed['url']
+            match_obj = re.search(self.url_file_regex, self.url, re.IGNORECASE)
+
+            if match_obj is not None:
+                self.file_name = match_obj.group("fn")
+
+            try:
+                if match_obj is not None:
+                    await self.DownloadFile()
+                else:
+                    await self.ScrapeUrl()
+            except requests.exceptions.HTTPError as e:
+                self.log.warning(f"Got http_status error on download: {e}")
+            except Exception:
+                self.log.error("Failed to save file")
+                self.log.error(f"URL: {self.url}")
+                self.log.error(f"File Name: {self.file_name}")
+                self.log.exception("Didn't save file")
+            await self.save()
+            return
+        elif self.embed['type'] in ['gifv']:
+            self.url = self.embed['video']['url']
             match_obj = re.search(self.url_file_regex, self.url, re.IGNORECASE)
 
             if match_obj is not None:
@@ -135,7 +156,7 @@ class Embed(DownloaderBase):
             self.log.warning("Didn't save file (Not sure what to do with articles for now)")
             await self.save()
             return
-        self.log.critical(embed)
+        self.log.critical(self.embed)
         self.log.critical("Unknown embed type was encountered!")
         await self.save()
         pass

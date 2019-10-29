@@ -43,10 +43,13 @@ class DataCollector:
             channels = sorted(server.channels, key=lambda x: x.position)
             for channel in channels:
                 self.log.info(f"Catchup on {channel}")
-                messages = self.client.logs_from(channel, limit=10000000)
+                messages = []
+                message_gen = self.client.logs_from(channel, limit=500)
+                async for message in message_gen:
+                    messages.append(message)
                 count = 0
                 try:
-                    async for message in messages:
+                    for message in reversed(messages):
                         count += 1
                         try:
                             parsed = await self.process_message(message)
@@ -57,10 +60,12 @@ class DataCollector:
                             await asyncio.sleep(np.random.rand()*5)
                             self.log.info("Wake up and scan")
                 except discord.errors.Forbidden:
-                    continue
+                    self.log.error("I am Forbidden from reading this channel!")
                 self.log.info(f"Channel {channel} had {count:,.0f} messages")
         self.log.info("Catchup completed")
-        pass
+
+        self.log.info("Begin old hash catchup")
+        self.log.info("Old hash completed")
 
     async def process_message(self, message):
         """New way to handle a message
@@ -81,18 +86,22 @@ class DataCollector:
             await asyncio.sleep(np.random.rand()*found_files)
 
             # Check to see if we have an e621
-            is_e621 = re.match(r"https?://e621.net/(post|pool)", url)
+            is_e621 = re.match(r"https?://e621.net/(post|pool)/show", url)
             if is_e621:
-                self.log.info("Found a valid e621 link!")
-                url_getter = e621(url)
-                await url_getter.process()
-                for url in url_getter.urls:
-                    await asyncio.sleep(np.random.rand()*found_files)
-                    self.log.info(f"Found URL: {url}")
-                    link = Link(url, message)
-                    await link.process()
-                    found_files += 1 if link.saved else 0
-                continue
+                try:
+                    self.log.info("Found a valid e621 link!")
+                    url_getter = e621(url)
+                    await url_getter.process()
+                    for url in url_getter.urls:
+                        await asyncio.sleep(np.random.rand()*found_files)
+                        self.log.info(f"Found URL: {url}")
+                        link = Link(url, message)
+                        await link.process()
+                        found_files += 1 if link.saved else 0
+                    continue
+                except ValueError:
+                    self.log.exception(f"e621 couldn't parse {url}, try normal ways")
+                    pass
 
             # Link wasn't a special case, just run it
             self.log.info(f"Found URL: {url}")
@@ -174,8 +183,37 @@ class DataCollector:
             )
             """
         self.sql.cur.execute(cmd, locals())
-        await self.sql.commit()
 
+        if message.channel:
+            name = message.channel.name
+            channel_id = message.channel.id
+            server_id = message.server.id if message.server else None
+            topic = message.channel.topic
+            position = message.channel.position
+            _type = str(message.channel.type)
+            mention = message.channel.mention
+            cmd = """
+                INSERT OR REPLACE INTO channels 
+                (
+                    name,
+                    channel_id,
+                    server_id,
+                    topic,
+                    position,
+                    type,
+                    mention
+                ) VALUES (
+                    :name,
+                    :channel_id,
+                    :server_id,
+                    :topic,
+                    :position,
+                    :_type,
+                    :mention
+                )
+                """
+            self.sql.cur.execute(cmd, locals())
+        await self.sql.commit(now=False)
 
     async def on_channel_create(self, channel):
         pass

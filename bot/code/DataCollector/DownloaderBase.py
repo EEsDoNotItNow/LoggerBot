@@ -60,12 +60,18 @@ class DownloaderBase:
             for chunk in r.iter_content(chunk_size=1024): 
                 if chunk: # filter out keep-alive new chunks
                     f.write(chunk)
+
+        # TODO: Attempt to hash file
+        # TODO: If hash already exists, move file to a duplication folder for later pruning
         self.saved = True
 
 
     async def ScrapeUrl(self):
         self.log.info("Currently not attempting to scape URLS, just return")
         return
+        # Examples to hunt for later?
+        # From: view-source:https://imgur.com/gallery/QlIaaZT
+        #   <source src="//i.imgur.com/p2skyi5.mp4" type="video/mp4">
 
         self.log.info(f"Attempt to scrape url {self.url} to {self.dest}")
 
