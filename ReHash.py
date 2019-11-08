@@ -17,6 +17,8 @@ parser.add_argument('--rowid', metavar='N', type=int,
                     help='row id to start processing at, defaults to all rows')
 parser.add_argument('--threshold', metavar='N', type=int, default=5,
                     help='All values must be <= to this value to trigger a match (Defaults to 5)')
+parser.add_argument('--md5', action='store_true',
+                    help='Auto pick in cases where MD5 sums match')
 
 args = parser.parse_args()
 
@@ -257,9 +259,12 @@ for idx, current_image in enumerate(cur.execute("SELECT *,rowid FROM images WHER
         elif p_current.stat().st_size > db_image['size']:
             logger.info(f"Suggesting A, as it is larger ({db_image['size']} < {p_current.stat().st_size})")
         while 1:
-            if current_image['md5'] == db_image['md5']:
+            if current_image['md5'] == db_image['md5'] and args.md5:
                 logger.info("md5 is identical! Keeping A, moving B")
                 choice = 'a'
+            elif current_image['md5'] == db_image['md5'] and  not args.md5:
+                logger.info("md5 is identical!")
+                choice = input("> ").lower()
             else:
                 choice = input("> ").lower()
 

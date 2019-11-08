@@ -53,11 +53,11 @@ class DownloaderBase:
             self.log.error("Bad status on file, we are done here!")
             raise
         
-        if len(Path(self.file_name).suffix.split('?')) > 1:
+        if len(Path(self.file_name).name.split('?')) > 1:
             fn = Path(self.file_name)
             log.warning("Detected malformed filename, correcting")
-            f = list(filter(None, re.split("[?&]+", fn.suffix)))
-            self.file_name = str(Path(fn.stem + f[0]))
+            f = list(filter(None, re.split("[?&]+", fn.name)))
+            self.file_name = str(Path(f[0]))
             log.warning(f"New filename is {self.file_name}")
 
         # Check to see if we need to modify our file_name
