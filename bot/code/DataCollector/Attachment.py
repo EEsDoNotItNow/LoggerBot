@@ -15,7 +15,9 @@ class Attachment(DownloaderBase):
     def __init__(self, attachment, message):
         super().__init__()
         self.attachment = defaultdict(lambda: None)
-        self.attachment.update(attachment)
+        # self.attachment.update(attachment.__dict__)
+        self.attachment['url'] = attachment.url
+        self.attachment['filename'] = attachment.filename
         self.message = message
         self.channel_name = message.channel.name if message.channel else message.author.name
         self.guild_name = message.guild.name if message.guild else "PrivateMessages"

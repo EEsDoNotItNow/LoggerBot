@@ -18,6 +18,8 @@ from .Link import Link
 
 class DataCollector:
 
+    disk_emoji = u'\U0001f4be'
+
     def __init__(self):
         self.log = Log()
         self.client = Client()
@@ -98,7 +100,10 @@ class DataCollector:
                         self.log.info(f"Found URL: {url}")
                         link = Link(url, message)
                         await link.process()
-                        found_files += 1 if link.saved else 0
+                        found_files += 1 if link.saved else 0            
+                        if link.saved:
+                            self.log.info("Adding saved emoji to message")
+                            await message.add_reaction(self.disk_emoji)
                     continue
                 except ValueError:
                     self.log.exception(f"e621 couldn't parse {url}, try normal ways")
@@ -111,6 +116,9 @@ class DataCollector:
             found_files += 1 if link.saved else 0
             if not link.saved:
                 self.log.info(f"Failed to use Link on {url}")
+            if link.saved:
+                self.log.info("Adding saved emoji to message")
+                await message.add_reaction(self.disk_emoji)
 
         if found_files:
             return found_files
@@ -122,6 +130,9 @@ class DataCollector:
             embed = Embed(embed, message)
             await embed.process()
             found_files += 1
+            if embed.saved:
+                self.log.info("Adding saved emoji to message")
+                await message.add_reaction(self.disk_emoji)
 
         if found_files:
             return found_files
@@ -133,6 +144,9 @@ class DataCollector:
             attachment = Attachment(attachment, message)
             await attachment.process()
             found_files += 1
+            if attachment.saved:
+                self.log.info("Adding saved emoji to message")
+                await message.add_reaction(self.disk_emoji)
             
         return found_files
 
